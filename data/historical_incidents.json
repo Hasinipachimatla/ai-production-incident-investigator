@@ -1,0 +1,248 @@
+[
+  {
+    "id": "INC-HIST-001",
+    "title": "PostgreSQL Connection Pool Saturation in Checkout Service",
+    "category": "database",
+    "service": "checkout-service",
+    "symptoms": "Spike in HTTP 500 errors during peak checkout flow, database connection timeout exceptions, active connections reached maximum pool limit of 100",
+    "root_cause": "Unreleased database connections due to missing context manager in payment transaction handler causing connection pool starvation",
+    "recommended_remediation": "restart_connection_pool",
+    "log_patterns": [
+      "OperationalError: remaining connection slots are reserved for non-replication superuser connections",
+      "TimeoutError: QueuePool limit of size 100 overflow 20 reached, connection timed out, timeout 30.00",
+      "FATAL: too many connections for role 'checkout_app'"
+    ],
+    "metric_signatures": {
+      "db_pool_utilization_pct": 100.0,
+      "error_rate_pct": 34.5,
+      "p99_latency_ms": 3200.0,
+      "cpu_percent": 68.0
+    },
+    "tags": ["postgres", "connection_pool", "timeout", "checkout", "leak"]
+  },
+  {
+    "id": "INC-HIST-002",
+    "title": "Slow Third-Party Payment Gateway Inducing Upstream Request Backlog",
+    "category": "latency",
+    "service": "payment-gateway",
+    "symptoms": "Upstream checkout API response times degraded to >5000ms, worker threads blocked waiting for payment provider HTTP response, high thread pool queue depth",
+    "root_cause": "External payment processor webhook experiencing 15s latency without local socket read timeout configured, monopolizing worker threads",
+    "recommended_remediation": "rate_limit_throttle",
+    "log_patterns": [
+      "requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='pay-partner.internal', port=443): Read timed out",
+      "Thread starvation warning: thread pool queue size exceeded 500 tasks",
+      "Gateway timeout 504 received from payment upstream"
+    ],
+    "metric_signatures": {
+      "p99_latency_ms": 4800.0,
+      "error_rate_pct": 18.2,
+      "worker_queue_depth": 540,
+      "cpu_percent": 45.0
+    },
+    "tags": ["payment", "read_timeout", "latency", "thread_exhaustion", "gateway"]
+  },
+  {
+    "id": "INC-HIST-003",
+    "title": "Redis Cache Invalidation Storm Causing Database Overload",
+    "category": "cache",
+    "service": "catalog-service",
+    "symptoms": "Cache hit ratio dropped from 94% to 12%, instant 8x query throughput increase on catalog database replica, database CPU pegged at 98%",
+    "root_cause": "Bulk product inventory cache key expiration synchronized at midnight with zero TTL jitter, triggering stampede on PostgreSQL primary",
+    "recommended_remediation": "flush_and_warm_cache",
+    "log_patterns": [
+      "RedisCacheMiss: key prefix 'product_cat_' expired simultaneously",
+      "Postgres CPU alert: CPU utilization > 95% for 3 consecutive intervals",
+      "SlowQueryLog: SELECT * FROM product_variants took 4210ms"
+    ],
+    "metric_signatures": {
+      "cache_hit_rate_pct": 11.5,
+      "db_cpu_pct": 98.2,
+      "p99_latency_ms": 2900.0,
+      "error_rate_pct": 12.0
+    },
+    "tags": ["redis", "cache_stampede", "ttl_jitter", "db_overload", "catalog"]
+  },
+  {
+    "id": "INC-HIST-004",
+    "title": "Uncaught Null Reference Exception in Inventory Stock Sync",
+    "category": "service_error",
+    "service": "inventory-api",
+    "symptoms": "HTTP 500 error spike reaching 52% on /api/v1/inventory/reserve, stack trace reported in application logs, orders failing verification",
+    "root_cause": "Supplier inventory feed sent null warehouse_id payload after upstream schema update, leading to unhandled AttributeError in inventory reservation service",
+    "recommended_remediation": "rollback_config_flag",
+    "log_patterns": [
+      "AttributeError: 'NoneType' object has no attribute 'warehouse_id'",
+      "Unhandled exception during order item reservation",
+      "HTTP 500 Internal Server Error returned to client"
+    ],
+    "metric_signatures": {
+      "error_rate_pct": 52.4,
+      "p99_latency_ms": 190.0,
+      "cpu_percent": 35.0
+    },
+    "tags": ["inventory", "null_pointer", "schema_mismatch", "500_spike", "bug"]
+  },
+  {
+    "id": "INC-HIST-005",
+    "title": "Circuit Breaker Tripped in Recommendation Engine Due to Downstream Hang",
+    "category": "circuit_breaker",
+    "service": "recommendation-service",
+    "symptoms": "Front page fallback widgets triggered, recommendation endpoint returning HTTP 503 Circuit Breaker Open state, zero traffic reaching recommendation model",
+    "root_cause": "Vector search similarity cluster degraded due to out-of-memory node crash, causing consecutive call timeouts exceeding circuit breaker error threshold of 50%",
+    "recommended_remediation": "reset_circuit_breaker",
+    "log_patterns": [
+      "CircuitBreakerOpenException: failure rate 68% exceeded threshold 50%",
+      "Short-circuiting request to vector-index cluster",
+      "Serving fallback static recommendations"
+    ],
+    "metric_signatures": {
+      "circuit_breaker_state": "OPEN",
+      "error_rate_pct": 31.0,
+      "p99_latency_ms": 85.0
+    },
+    "tags": ["circuit_breaker", "recommendation", "vector_search", "503", "fallback"]
+  },
+  {
+    "id": "INC-HIST-006",
+    "title": "High Traffic Burst Exceeding Worker Capacity in Order Ingestion",
+    "category": "capacity",
+    "service": "order-service",
+    "symptoms": "Sudden 4x incoming request rate spike, worker thread pool 100% busy, HTTP 429 and 503 responses returned, elevated request queue latency",
+    "root_cause": "Flash marketing campaign launched without auto-scaler threshold pre-warming, exhausting existing 4 worker container capacity",
+    "recommended_remediation": "scale_worker_replicas",
+    "log_patterns": [
+      "Gunicorn worker timeout, worker pid 1828 killed",
+      "CapacityAlert: worker saturation 100% across all available replicas",
+      "Backpressure queue full, rejecting incoming requests"
+    ],
+    "metric_signatures": {
+      "cpu_percent": 96.5,
+      "worker_saturation_pct": 100.0,
+      "requests_per_sec": 3800.0,
+      "error_rate_pct": 27.5,
+      "p99_latency_ms": 3100.0
+    },
+    "tags": ["capacity", "scale_out", "worker_saturation", "traffic_burst", "orders"]
+  },
+  {
+    "id": "INC-HIST-007",
+    "title": "Database Deadlock During Concurrent Basket Checkout Mutations",
+    "category": "database",
+    "service": "checkout-service",
+    "symptoms": "Sporadic transaction rollbacks with HTTP 500, deadlock detection logs from PostgreSQL, latency jitter on /checkout/commit",
+    "root_cause": "Inventory lock and basket lock acquired in reverse order in two concurrent API endpoints, creating cyclic transaction dependency deadlock",
+    "recommended_remediation": "restart_connection_pool",
+    "log_patterns": [
+      "ERROR: deadlock detected - Process 4812 waits for ExclusiveLock on tuple",
+      "TransactionRollbackError: serialization failure due to concurrent lock conflict",
+      "Rollback executed for transaction tx_98124"
+    ],
+    "metric_signatures": {
+      "db_deadlock_count": 48,
+      "error_rate_pct": 14.8,
+      "p99_latency_ms": 2100.0
+    },
+    "tags": ["database", "deadlock", "postgres", "concurrency", "locks"]
+  },
+  {
+    "id": "INC-HIST-008",
+    "title": "DNS Resolver Timeout Cascading to Internal Auth Validation",
+    "category": "network",
+    "service": "auth-service",
+    "symptoms": "Token verification taking 5000ms instead of 5ms, auth service failing token exchanges, intermittent 502 Bad Gateway responses",
+    "root_cause": "CoreDNS pod restart during node upgrade causing local resolver cache misses and fallback to slow external root servers",
+    "recommended_remediation": "rate_limit_throttle",
+    "log_patterns": [
+      "socket.gaierror: [Errno -3] Temporary failure in name resolution",
+      "DNS resolution timed out after 5000ms for auth.internal.mesh",
+      "Failed to verify JWT signature: public key JWKS fetch failed"
+    ],
+    "metric_signatures": {
+      "dns_lookup_time_ms": 4900.0,
+      "p99_latency_ms": 5200.0,
+      "error_rate_pct": 22.0
+    },
+    "tags": ["dns", "networking", "auth", "jwt", "timeout"]
+  },
+  {
+    "id": "INC-HIST-009",
+    "title": "Memory Leak in Product Search Image Resizer Worker",
+    "category": "resource",
+    "service": "search-service",
+    "symptoms": "Worker RSS memory steadily climbing until OOMKilled by Linux kernel, search queries intermittently dropping with 502",
+    "root_cause": "PIL Image object buffer not closed after thumbnail rendering in background search indexer, leaking unmanaged C memory buffers",
+    "recommended_remediation": "scale_worker_replicas",
+    "log_patterns": [
+      "Process killed by OOM killer: search_worker pid 9123",
+      "Memory leak warning: container memory usage exceeded 95% threshold",
+      "Worker exited prematurely with exit status 137"
+    ],
+    "metric_signatures": {
+      "memory_percent": 98.5,
+      "oom_events": 6,
+      "error_rate_pct": 16.0,
+      "p99_latency_ms": 1800.0
+    },
+    "tags": ["memory_leak", "oom", "search", "resource_exhaustion", "worker"]
+  },
+  {
+    "id": "INC-HIST-010",
+    "title": "Misconfigured Rate Limiting Filter Blocking Legitimate Mobile App Clients",
+    "category": "configuration",
+    "service": "api-gateway",
+    "symptoms": "Spike in HTTP 429 Too Many Requests on all mobile endpoints, user complaints of inability to login or browse, zero backend service degradation",
+    "root_cause": "Rate limit threshold mistakenly configured per-NAT-gateway IP instead of per-client-session ID in latest gateway route definition deployment",
+    "recommended_remediation": "rollback_config_flag",
+    "log_patterns": [
+      "RateLimiter: IP 192.168.1.50 exceeded limit 100 req/min (actual: 4500 req/min)",
+      "HTTP 429 Too Many Requests response dispatched to user-agent 'ShopApp/3.2'",
+      "Token bucket depleted for client route /api/mobile/*"
+    ],
+    "metric_signatures": {
+      "http_429_rate_pct": 48.0,
+      "error_rate_pct": 48.0,
+      "p99_latency_ms": 45.0
+    },
+    "tags": ["rate_limit", "gateway", "429", "config_error", "mobile"]
+  },
+  {
+    "id": "INC-HIST-011",
+    "title": "High Disk I/O Wait Stalling Application Write Operations",
+    "category": "resource",
+    "service": "order-service",
+    "symptoms": "Database commit latency increased from 4ms to 3500ms, write queries queueing, iowait metric on storage volume at 89%",
+    "root_cause": "Automated snapshot backup process running concurrently with unindexed table vacuum during high business transaction volume",
+    "recommended_remediation": "rate_limit_throttle",
+    "log_patterns": [
+      "Storage I/O latency alert: disk await time > 80ms",
+      "PostgreSQL checkpoint warning: checkpoints occurring too frequently (9 seconds apart)",
+      "Write operation wait time exceeded warning limit"
+    ],
+    "metric_signatures": {
+      "disk_iowait_pct": 89.2,
+      "p99_latency_ms": 3600.0,
+      "error_rate_pct": 19.5
+    },
+    "tags": ["disk_io", "iowait", "backup", "storage", "database"]
+  },
+  {
+    "id": "INC-HIST-012",
+    "title": "Stale Cache Rendering Incorrect Pricing Information",
+    "category": "cache",
+    "service": "pricing-service",
+    "symptoms": "Users seeing mismatched checkout prices vs product page prices, customer support escalation, stale response headers",
+    "root_cause": "Redis pub/sub cache purge broadcast dropped due to network buffer overflow, leaving stale discount price cache entries active on secondary nodes",
+    "recommended_remediation": "flush_and_warm_cache",
+    "log_patterns": [
+      "CacheConsistencyError: price discrepancy between redis cache and sql pricing table",
+      "PubSub message delivery dropped due to subscriber buffer overflow",
+      "Stale price tag detected on SKU 98214"
+    ],
+    "metric_signatures": {
+      "cache_inconsistency_count": 142,
+      "error_rate_pct": 8.5,
+      "p99_latency_ms": 110.0
+    },
+    "tags": ["cache", "pricing", "redis", "inconsistency", "pubsub"]
+  }
+]

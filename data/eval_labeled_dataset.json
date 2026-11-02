@@ -1,0 +1,122 @@
+[
+  {
+    "query_id": "EVAL-001",
+    "query_text": "PostgreSQL connection pool exhausted in checkout service with queue pool timeout errors and remaining connection slots reserved",
+    "service": "checkout-service",
+    "expected_category": "database",
+    "ground_truth_case_ids": ["INC-HIST-001"],
+    "notes": "Single exact match scenario. Top-K=3 will pull 2 irrelevant cases; Adaptive should pull only 1."
+  },
+  {
+    "query_id": "EVAL-002",
+    "query_text": "Slow response from payment gateway downstream, read timeout exceptions and blocked worker threads causing 504 gateway timeout",
+    "service": "payment-gateway",
+    "expected_category": "latency",
+    "ground_truth_case_ids": ["INC-HIST-002"],
+    "notes": "External latency & thread exhaustion pattern."
+  },
+  {
+    "query_id": "EVAL-003",
+    "query_text": "Redis cache stampede with synchronized key expiration causing database CPU saturation and severe cache hit ratio drop",
+    "service": "catalog-service",
+    "expected_category": "cache",
+    "ground_truth_case_ids": ["INC-HIST-003"],
+    "notes": "Cache invalidation storm scenario."
+  },
+  {
+    "query_id": "EVAL-004",
+    "query_text": "Null pointer AttributeError exception in inventory service during stock reservation payload handling, 500 error spike",
+    "service": "inventory-api",
+    "expected_category": "service_error",
+    "ground_truth_case_ids": ["INC-HIST-004"],
+    "notes": "Unhandled code exception / schema regression."
+  },
+  {
+    "query_id": "EVAL-005",
+    "query_text": "Circuit breaker open state in recommendation service returning 503 fallback widgets due to downstream timeout failure threshold",
+    "service": "recommendation-service",
+    "expected_category": "circuit_breaker",
+    "ground_truth_case_ids": ["INC-HIST-005"],
+    "notes": "Circuit breaker tripped event."
+  },
+  {
+    "query_id": "EVAL-006",
+    "query_text": "Massive incoming traffic surge causing worker thread saturation 100% and Gunicorn worker timeouts in order ingestion",
+    "service": "order-service",
+    "expected_category": "capacity",
+    "ground_truth_case_ids": ["INC-HIST-006"],
+    "notes": "Worker capacity scaling issue."
+  },
+  {
+    "query_id": "EVAL-007",
+    "query_text": "Database deadlock detected on PostgreSQL table locks with transaction serialization rollback during concurrent basket operations",
+    "service": "checkout-service",
+    "expected_category": "database",
+    "ground_truth_case_ids": ["INC-HIST-007", "INC-HIST-001"],
+    "notes": "Multi-match scenario: primarily deadlock but shares DB checkout concurrency context with connection pool case."
+  },
+  {
+    "query_id": "EVAL-008",
+    "query_text": "CoreDNS resolver timeout causing JWT token validation failures and 502 bad gateway across authentication endpoints",
+    "service": "auth-service",
+    "expected_category": "network",
+    "ground_truth_case_ids": ["INC-HIST-008"],
+    "notes": "DNS resolution timeout failure."
+  },
+  {
+    "query_id": "EVAL-009",
+    "query_text": "Worker memory leak with steadily climbing RSS memory until OOM killer terminates search image resizer container",
+    "service": "search-service",
+    "expected_category": "resource",
+    "ground_truth_case_ids": ["INC-HIST-009"],
+    "notes": "Memory leak OOM scenario."
+  },
+  {
+    "query_id": "EVAL-010",
+    "query_text": "Rate limiter misconfiguration returning 429 Too Many Requests to mobile client app traffic due to per-IP threshold",
+    "service": "api-gateway",
+    "expected_category": "configuration",
+    "ground_truth_case_ids": ["INC-HIST-010"],
+    "notes": "API gateway configuration bug."
+  },
+  {
+    "query_id": "EVAL-011",
+    "query_text": "High disk iowait and storage volume latency during concurrent table vacuum and snapshot backup stalling write transactions",
+    "service": "order-service",
+    "expected_category": "resource",
+    "ground_truth_case_ids": ["INC-HIST-011"],
+    "notes": "Disk I/O contention pattern."
+  },
+  {
+    "query_id": "EVAL-012",
+    "query_text": "Cache inconsistency and stale pricing data displayed to checkout customers due to Redis pubsub buffer drop",
+    "service": "pricing-service",
+    "expected_category": "cache",
+    "ground_truth_case_ids": ["INC-HIST-012", "INC-HIST-003"],
+    "notes": "Multi-match cache failure scenario."
+  },
+  {
+    "query_id": "EVAL-013",
+    "query_text": "Novel hardware GPU driver kernel panic in ML inference cluster during matrix tensor computation",
+    "service": "inference-node",
+    "expected_category": "hardware",
+    "ground_truth_case_ids": [],
+    "notes": "Novel / Out-of-Domain scenario with 0 true matches. Top-K=3 will incorrectly return 3 irrelevant cases; Adaptive should return 0."
+  },
+  {
+    "query_id": "EVAL-014",
+    "query_text": "Compromised API secret token attempting unauthorized admin credential dump across internal mesh",
+    "service": "security-perimeter",
+    "expected_category": "security",
+    "ground_truth_case_ids": [],
+    "notes": "Novel security breach query with 0 true matches in operational performance cases. Adaptive should return 0."
+  },
+  {
+    "query_id": "EVAL-015",
+    "query_text": "Severe database connection timeout and pool exhaustion under checkout load with unreleased connections",
+    "service": "checkout-service",
+    "expected_category": "database",
+    "ground_truth_case_ids": ["INC-HIST-001"],
+    "notes": "Alternative paraphrased query for DB connection exhaustion."
+  }
+]
